@@ -10,17 +10,13 @@ import { useState } from 'react';
 
 function ClientForm({ client, onSave, onCancel }) {
   const [loading, setLoading] = useState(false);
-  
+
   // Initialize form with client data or empty values
   const { control, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
       name: client?.name || '',
       email: client?.email || '',
       phone: client?.phone || '',
-      address: client?.address || '',
-      city: client?.city || '',
-      state: client?.state || '',
-      zip: client?.zip || '',
     }
   });
 
@@ -52,7 +48,7 @@ function ClientForm({ client, onSave, onCancel }) {
             )}
           />
         </Grid>
-        
+
         <Grid item xs={12}>
           <Controller
             name="email"
@@ -77,7 +73,7 @@ function ClientForm({ client, onSave, onCancel }) {
             )}
           />
         </Grid>
-        
+
         <Grid item xs={12}>
           <Controller
             name="phone"
@@ -95,72 +91,8 @@ function ClientForm({ client, onSave, onCancel }) {
             )}
           />
         </Grid>
-        
-        <Grid item xs={12}>
-          <Controller
-            name="address"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Endereço"
-                fullWidth
-                error={!!errors.address}
-                helperText={errors.address?.message}
-              />
-            )}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6}>
-          <Controller
-            name="city"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Cidade"
-                fullWidth
-                error={!!errors.city}
-                helperText={errors.city?.message}
-              />
-            )}
-          />
-        </Grid>
-        
-        <Grid item xs={6} sm={3}>
-          <Controller
-            name="state"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Estado"
-                fullWidth
-                error={!!errors.state}
-                helperText={errors.state?.message}
-              />
-            )}
-          />
-        </Grid>
-        
-        <Grid item xs={6} sm={3}>
-          <Controller
-            name="zip"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="CEP"
-                fullWidth
-                error={!!errors.zip}
-                helperText={errors.zip?.message}
-              />
-            )}
-          />
-        </Grid>
       </Grid>
-      
+
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, gap: 1 }}>
         <Button onClick={onCancel} disabled={loading}>
           Cancelar
