@@ -131,9 +131,9 @@ function Clients() {
     const handleSaveClient = async (formData) => {
         try {
             if (currentClient) {
-                // Update
-                await api.put(`/clients/${currentClient.id}`, formData);
+                await api.patch(`/clients/${currentClient.id}`, formData);
                 showSuccess('Cliente atualizado com sucesso');
+
             } else {
                 // Create
                 await api.post('/clients', formData);
