@@ -3,14 +3,23 @@ import api from "./api";
 
 export const getTechnicians = async () => {
   const res = await api.get("/technicians");
-  return res.data; // [{id,name,email}, …]
+  return res.data;
 };
 
 export const createTechnician = async (payload) => {
-  // payload: { name, email, password }
   const res = await api.post("/auth/register", {
     ...payload,
     role: "technician",
   });
-  return res.data; // {id,email,name,role,…}
+  return res.data;
+};
+
+export const updateTechnician = async (id, payload) => {
+  const res = await api.put(`/technicians/${id}`, payload);
+  return res.data;
+};
+
+export const deleteTechnician = async (id) => {
+  const res = await api.delete(`/technicians/${id}`);
+  return res.data;
 };

@@ -17,16 +17,28 @@ import {
     IconButton,
     Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+    Add as AddIcon,
+    Refresh as RefreshIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+} from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import InputMask from 'react-input-mask';
-import { getTechnicians, createTechnician } from '../services/technicianService';
+import {
+    getTechnicians,
+    createTechnician,
+    updateTechnician,
+    deleteTechnician,
+} from '../services/technicianService';
 import { useSnackbar } from '../hooks/useSnackbar';
 
 function Technicians() {
     const [techs, setTechs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [isEdit, setIsEdit] = useState(false);
+    const [selectedTech, setSelectedTech] = useState(null);
     const { showSuccess, showError } = useSnackbar();
 
     const {
@@ -61,23 +73,77 @@ function Technicians() {
         fetchTechs();
     }, []);
 
+    const openCreateDialog = () => {
+        reset({
+            name: '',
+            email: '',
+            password: '',
+            cpf_cnpj: '',
+            phone: '',
+        });
+        setIsEdit(false);
+        setSelectedTech(null);
+        setDialogOpen(true);
+    };
+
+    const openEditDialog = (tech) => {
+        reset({
+            name: tech.name,
+            email: tech.email,
+            password: '',
+            cpf_cnpj: tech.cpf_cnpj,
+            phone: tech.phone,
+        });
+        setIsEdit(true);
+        setSelectedTech(tech);
+        setDialogOpen(true);
+    };
+
+    const handleDelete = async (tech) => {
+        if (!window.confirm(`Deseja realmente excluir o técnico ${tech.name}?`)) return;
+        try {
+            setLoading(true);
+            await deleteTechnician(tech.id);
+            showSuccess(`Técnico ${tech.name} excluído com sucesso`);
+            fetchTechs();
+        } catch (err) {
+            console.error('Erro ao excluir:', err.response?.data);
+            showError(err.response?.data?.error || 'Erro ao excluir técnico');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const onSubmit = async (form) => {
         try {
             setLoading(true);
-            const newTech = await createTechnician(form);
-            showSuccess(`Técnico ${newTech.name} criado com sucesso`);
+            if (isEdit && selectedTech) {
+                const payload = {};
+                if (form.name !== selectedTech.name) payload.name = form.name;
+                if (form.email !== selectedTech.email) payload.email = form.email;
+                if (form.cpf_cnpj !== selectedTech.cpf_cnpj) payload.cpf_cnpj = form.cpf_cnpj;
+                if (form.phone !== selectedTech.phone) payload.phone = form.phone;
+                if (form.password) payload.password = form.password;
+
+                await updateTechnician(selectedTech.id, payload);
+                showSuccess(`Técnico ${form.name} atualizado com sucesso`);
+            } else {
+                await createTechnician(form);
+                showSuccess(`Técnico ${form.name} criado com sucesso`);
+            }
             setDialogOpen(false);
             reset();
             fetchTechs();
         } catch (err) {
-            if (err.validationErrors) {
+            console.error('Resposta de erro do servidor:', err.response?.data);
+            if (err.response?.data?.error) {
+                showError(err.response.data.error);
+            } else if (err.validationErrors) {
                 Object.entries(err.validationErrors).forEach(([field, msgs]) => {
                     setError(field, { type: 'server', message: msgs.join(' ') });
                 });
-            } else if (err.originalError?.response?.status === 400) {
-                showError(err.originalError.response.data.error);
             } else {
-                showError(err.message || 'Erro ao criar técnico');
+                showError(err.message || 'Erro ao salvar técnico');
             }
         } finally {
             setLoading(false);
@@ -90,7 +156,7 @@ function Technicians() {
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setDialogOpen(true)}
+                    onClick={openCreateDialog}
                 >
                     Novo Técnico
                 </Button>
@@ -110,6 +176,7 @@ function Technicians() {
                         <TableCell>E-mail</TableCell>
                         <TableCell>CPF/CNPJ</TableCell>
                         <TableCell>Telefone</TableCell>
+                        <TableCell align="right">Ações</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -119,11 +186,23 @@ function Technicians() {
                             <TableCell>{t.email}</TableCell>
                             <TableCell>{t.cpf_cnpj}</TableCell>
                             <TableCell>{t.phone}</TableCell>
+                            <TableCell align="right">
+                                <Tooltip title="Editar">
+                                    <IconButton onClick={() => openEditDialog(t)}>
+                                        <EditIcon />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Excluir">
+                                    <IconButton onClick={() => handleDelete(t)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            </TableCell>
                         </TableRow>
                     ))}
                     {!loading && techs.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={4} align="center">
+                            <TableCell colSpan={5} align="center">
                                 Nenhum técnico cadastrado
                             </TableCell>
                         </TableRow>
@@ -137,7 +216,9 @@ function Technicians() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Novo Técnico</DialogTitle>
+                <DialogTitle>
+                    {isEdit ? 'Editar Técnico' : 'Novo Técnico'}
+                </DialogTitle>
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <DialogContent dividers>
                         <Controller
@@ -173,34 +254,57 @@ function Technicians() {
                             )}
                         />
 
-                        <Controller
-                            name="password"
-                            control={control}
-                            rules={{
-                                required: 'Senha é obrigatória',
-                                minLength: { value: 6, message: 'Mínimo 6 caracteres' },
-                            }}
-                            render={({ field }) => (
-                                <TextField
-                                    {...field}
-                                    label="Senha"
-                                    type="password"
-                                    fullWidth
-                                    margin="normal"
-                                    error={!!errors.password}
-                                    helperText={errors.password?.message}
-                                />
-                            )}
-                        />
+                        {!isEdit && (
+                            <Controller
+                                name="password"
+                                control={control}
+                                rules={{
+                                    required: 'Senha é obrigatória',
+                                    minLength: { value: 6, message: 'Mínimo 6 caracteres' },
+                                }}
+                                render={({ field }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Senha"
+                                        type="password"
+                                        fullWidth
+                                        margin="normal"
+                                        error={!!errors.password}
+                                        helperText={errors.password?.message}
+                                    />
+                                )}
+                            />
+                        )}
+                        {isEdit && (
+                            <Controller
+                                name="password"
+                                control={control}
+                                rules={{
+                                    minLength: {
+                                        value: 6,
+                                        message: 'Mínimo 6 caracteres',
+                                    },
+                                }}
+                                render={({ field }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Nova Senha (opcional)"
+                                        type="password"
+                                        fullWidth
+                                        margin="normal"
+                                        error={!!errors.password}
+                                        helperText={errors.password?.message}
+                                    />
+                                )}
+                            />
+                        )}
 
                         <Controller
                             name="cpf_cnpj"
                             control={control}
                             rules={{ required: 'CPF/CNPJ é obrigatório' }}
                             render={({ field }) => {
-                                // remove tudo que não é dígito para contar
                                 const digits = (field.value || '').replace(/\D/g, '');
-                                // CPF = 11 dígitos, CNPJ = 14
                                 const isCnpj = digits.length > 11;
                                 return (
                                     <InputMask
