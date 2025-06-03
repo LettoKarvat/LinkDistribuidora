@@ -13,7 +13,6 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useState } from 'react';
 import { styled } from '@mui/material/styles';
@@ -120,11 +119,7 @@ function AppBar({ drawerWidth, onMenuToggle }) {
             open={Boolean(anchorEl)}
             onClose={handleClose}
           >
-            <MenuItem onClick={handleClose} dense sx={{ minWidth: 170 }}>
-              <AccountCircleIcon fontSize="small" sx={{ mr: 1 }} />
-              <Typography variant="body2">Meu perfil</Typography>
-            </MenuItem>
-            <Divider />
+            {/* Removido "Meu perfil" */}
             <MenuItem onClick={handleLogout} dense>
               <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
               <Typography variant="body2">Sair</Typography>

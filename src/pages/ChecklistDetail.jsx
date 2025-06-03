@@ -1,5 +1,3 @@
-// src/pages/ChecklistDetail.jsx
-
 import React, { useEffect, useState } from 'react';
 import {
     Container,
@@ -15,6 +13,7 @@ import {
     Dialog,
     DialogContent,
     IconButton,
+    useTheme,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -26,9 +25,12 @@ export default function ChecklistDetail() {
     const [entry, setEntry] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Estado para controlar o Dialog de imagem ampliada
+    // Controle do Dialog de imagem ampliada
     const [openImageDialog, setOpenImageDialog] = useState(false);
     const [currentImage, setCurrentImage] = useState('');
+
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     useEffect(() => {
         fetchEntry();
@@ -76,7 +78,7 @@ export default function ChecklistDetail() {
 
     // Converte entry.values em array de [ [label, valor], ... ]
     const fields = Object.entries(entry.values);
-    // entry.attachments agora é lista de data-URIs (strings base64)
+    // Lista de data-URIs (strings base64)
     const attachments = entry.attachments || [];
 
     return (
@@ -84,7 +86,14 @@ export default function ChecklistDetail() {
             <Typography variant="h5" gutterBottom>
                 Detalhes do Checklist (ID: {entry.id})
             </Typography>
-            <Paper sx={{ p: 2, mt: 2, backgroundColor: '#262626', color: '#fff' }}>
+            <Paper
+                sx={{
+                    p: 2,
+                    mt: 2,
+                    // usa background padrão do papel, que se ajusta ao tema
+                    backgroundColor: theme.palette.background.paper,
+                }}
+            >
                 <Typography variant="subtitle1" gutterBottom>
                     Equipamento: {entry.equipment_name}
                 </Typography>
@@ -92,15 +101,13 @@ export default function ChecklistDetail() {
                     Cliente: {entry.client_name || '—'}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                    Tipo:{' '}
-                    {entry.entry_type === 'entrada' ? 'Entrada' : 'Saída'}
+                    Tipo: {entry.entry_type === 'entrada' ? 'Entrada' : 'Saída'}
                 </Typography>
                 <Typography variant="subtitle2" gutterBottom>
-                    Criado em:{' '}
-                    {new Date(entry.created_at).toLocaleString('pt-BR')}
+                    Criado em: {new Date(entry.created_at).toLocaleString('pt-BR')}
                 </Typography>
 
-                <Divider sx={{ my: 2, borderColor: '#555' }} />
+                <Divider sx={{ my: 2, borderColor: isDark ? '#555' : '#ddd' }} />
 
                 <Typography variant="subtitle1" gutterBottom>
                     Campos Preenchidos:
@@ -111,11 +118,7 @@ export default function ChecklistDetail() {
                             <ListItemText
                                 primary={label}
                                 secondary={
-                                    typeof valor === 'boolean'
-                                        ? valor
-                                            ? 'Sim'
-                                            : 'Não'
-                                        : String(valor)
+                                    typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : String(valor)
                                 }
                             />
                         </ListItem>
@@ -124,17 +127,13 @@ export default function ChecklistDetail() {
 
                 {attachments.length > 0 && (
                     <>
-                        <Divider sx={{ my: 2, borderColor: '#555' }} />
+                        <Divider sx={{ my: 2, borderColor: isDark ? '#555' : '#ddd' }} />
                         <Typography variant="subtitle1" gutterBottom>
                             Anexos:
                         </Typography>
                         <Grid container spacing={2}>
                             {attachments.map((dataUrl, idx) => (
                                 <Grid item xs={12} sm={6} key={idx}>
-                                    {/* 
-                    Quando o usuário clicar na imagem, abrimos o Dialog
-                    passando a própria string base64 (dataUrl) para currentImage
-                  */}
                                     <Box
                                         component="img"
                                         src={dataUrl}
@@ -144,11 +143,10 @@ export default function ChecklistDetail() {
                                             width: '100%',
                                             maxHeight: 200,
                                             objectFit: 'contain',
-                                            border: '1px solid #444',
+                                            border: `1px solid ${isDark ? '#444' : '#ccc'}`,
                                             borderRadius: 1,
-                                            p: 0.5,
-                                            backgroundColor: '#000',
-                                            cursor: 'pointer', // indica que é clicável
+                                            backgroundColor: isDark ? '#000' : '#f9f9f9',
+                                            cursor: 'pointer',
                                         }}
                                     />
                                     <Typography
@@ -157,6 +155,7 @@ export default function ChecklistDetail() {
                                             display: 'block',
                                             mt: 0.5,
                                             textAlign: 'center',
+                                            color: theme.palette.text.secondary,
                                         }}
                                     >
                                         Anexo {idx + 1}
@@ -168,9 +167,7 @@ export default function ChecklistDetail() {
                 )}
             </Paper>
 
-            {/* -------------------------------------------------------------
-          Dialog para exibir a imagem em tamanho maior
-      -------------------------------------------------------------- */}
+            {/* Dialog para exibir a imagem em tamanho maior */}
             <Dialog
                 open={openImageDialog}
                 onClose={handleCloseImage}
@@ -206,7 +203,7 @@ export default function ChecklistDetail() {
                         p: 0,
                     }}
                 >
-                    {/* Exibe a imagem em maior dimensão, mantendo proporção */}
+                    {/* Imagem ampliada, mantendo proporção */}
                     <Box
                         component="img"
                         src={currentImage}
