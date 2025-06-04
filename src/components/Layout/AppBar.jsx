@@ -79,7 +79,7 @@ function AppBar({ drawerWidth, onMenuToggle }) {
             fontWeight: 600
           }}
         >
-          Inova
+          ServicePro
         </Typography>
 
         {/* Theme Toggle */}

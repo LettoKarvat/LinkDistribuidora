@@ -101,7 +101,7 @@ function SideDrawer({ drawerWidth, mobileOpen, onDrawerToggle }) {
         }}
       >
         <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
-          Inova
+          ServicePro
         </Typography>
       </Box>
 
