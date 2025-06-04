@@ -1,5 +1,4 @@
 // src/pages/AttendanceDetail.jsx
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -30,12 +29,12 @@ import {
     Checkbox,
     FormControlLabel,
     CircularProgress,
+    Autocomplete,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import api from "../services/api";
 
-// Componente auxiliar para renderizar cada aba
 function TabPanel({ children, value, index }) {
     return value === index ? <Box sx={{ p: 2 }}>{children}</Box> : null;
 }
@@ -48,7 +47,7 @@ export default function AttendanceDetail() {
     const [loading, setLoading] = useState(true);
     const [tabIndex, setTabIndex] = useState(0);
 
-    // ─── Estados “Checklists” ────────────────────────────────────────────
+    // Checklists
     const [allTemplates, setAllTemplates] = useState([]);
     const [entries, setEntries] = useState([]);
     const [openChkDialog, setOpenChkDialog] = useState(false);
@@ -59,20 +58,20 @@ export default function AttendanceDetail() {
     const [values, setValues] = useState({});
     const [selectedFiles, setSelectedFiles] = useState([]);
 
-    // ─── Estados “Peças” ────────────────────────────────────────────────
+    // Peças
     const [allParts, setAllParts] = useState([]);
     const [attendanceParts, setAttendanceParts] = useState([]);
     const [openPartsDialog, setOpenPartsDialog] = useState(false);
-    const [selectedPartId, setSelectedPartId] = useState("");
+    const [selectedPart, setSelectedPart] = useState(null);
     const [selectedQty, setSelectedQty] = useState(1);
 
-    // ─── Estados “Serviços” ─────────────────────────────────────────────
+    // Serviços
     const [attendanceServices, setAttendanceServices] = useState([]);
     const [openServiceDialog, setOpenServiceDialog] = useState(false);
     const [newServiceDescription, setNewServiceDescription] = useState("");
     const [newServicePrice, setNewServicePrice] = useState("");
 
-    // ─── 1) Carrega O.S. ─────────────────────────────────────────────────
+    /* ─────────────── Carrega O.S. ─────────────── */
     useEffect(() => {
         if (!id) {
             setLoading(false);
@@ -84,18 +83,17 @@ export default function AttendanceDetail() {
                 setAttendance(res.data);
                 setLoading(false);
             })
-            .catch((err) => {
-                console.warn("Atendimento não encontrado ou erro no fetch:", err);
+            .catch(() => {
                 setLoading(false);
                 navigate("/attendances", { replace: true });
             });
     }, [id, navigate]);
 
-    // ─── 2) Quando O.S. carregada, busca templates, entries, partes e serviços ─
+    /* ─────────── Carrega dados relacionados ─────────── */
     useEffect(() => {
         if (!attendance) return;
 
-        // 2.a) Checklists
+        // Checklists
         api
             .get(`/checklist/templates?client_id=${attendance.client_id}`)
             .then((r) => setAllTemplates(r.data))
@@ -106,24 +104,33 @@ export default function AttendanceDetail() {
             .then((r) => setEntries(r.data))
             .catch(() => setEntries([]));
 
-        // 2.b) Peças
+        // Peças (catálogo)
         api
-            .get("/parts")
-            .then((r) => setAllParts(r.data))
+            .get("/stock/items")
+            .then((r) =>
+                setAllParts(
+                    r.data.map((it) => ({
+                        id: it.id,
+                        description: it.description,
+                        stock: it.quantity,
+                        unit_price: it.price,
+                    }))
+                )
+            )
             .catch(() => setAllParts([]));
         fetchAttendanceParts();
 
-        // 2.c) Serviços vinculados (filtra todos os services pelo attendance_id)
+        // Serviços
         api
             .get("/services")
-            .then((r) => {
-                const filtered = r.data.filter((s) => s.attendance_id === Number(id));
-                setAttendanceServices(filtered);
-            })
+            .then((r) =>
+                setAttendanceServices(
+                    r.data.filter((s) => s.attendance_id === Number(id))
+                )
+            )
             .catch(() => setAttendanceServices([]));
     }, [attendance, id]);
 
-    // ─── Função para buscar peças da O.S. ───────────────────────────────
     const fetchAttendanceParts = () => {
         api
             .get(`/attendances/${id}/parts`)
@@ -131,11 +138,10 @@ export default function AttendanceDetail() {
             .catch(() => setAttendanceParts([]));
     };
 
-    const handleTabChange = (e, newIndex) => {
-        setTabIndex(newIndex);
-    };
+    /* ──────────── Handlers Tabs ──────────── */
+    const handleTabChange = (_, newIndex) => setTabIndex(newIndex);
 
-    // ─── Ações Aba “Checklists” ─────────────────────────────────────────
+    /* ──────────── Checklists ──────────── */
     const handleOpenChkDialog = () => setOpenChkDialog(true);
     const handleCloseChkDialog = () => {
         setOpenChkDialog(false);
@@ -150,14 +156,12 @@ export default function AttendanceDetail() {
     const handleTemplateChange = (e) => {
         const chosenId = Number(e.target.value);
         setTemplateId(chosenId);
-
         const tpl = allTemplates.find((t) => t.id === chosenId);
         if (tpl) {
             setTemplatesFields(tpl);
             const initial = {};
             tpl.fields.forEach((f) => {
-                if (f.type === "boolean") initial[f.label] = false;
-                else initial[f.label] = "";
+                initial[f.label] = f.type === "boolean" ? false : "";
             });
             setValues(initial);
         } else {
@@ -167,9 +171,7 @@ export default function AttendanceDetail() {
     };
 
     const handleValueChange = (label, type, raw) => {
-        let v = raw;
-        if (type === "number") v = raw === "" ? "" : Number(raw);
-        if (type === "boolean") v = raw;
+        const v = type === "number" ? (raw === "" ? "" : Number(raw)) : raw;
         setValues((prev) => ({ ...prev, [label]: v }));
     };
 
@@ -178,7 +180,7 @@ export default function AttendanceDetail() {
             alert("Selecione um template e informe equipamento.");
             return;
         }
-        const invalid = templatesFields.fields.some((f) => {
+        const invalid = templatesFields.fields?.some((f) => {
             if (f.type === "boolean") return false;
             const v = values[f.label];
             return v === undefined || v === "";
@@ -201,11 +203,9 @@ export default function AttendanceDetail() {
             .post("/checklist/entries", payload)
             .then(async (res) => {
                 const entryId = res.data.id;
-                if (selectedFiles.length > 0) {
+                if (selectedFiles.length) {
                     const formData = new FormData();
-                    selectedFiles.forEach((file) => {
-                        formData.append("files", file);
-                    });
+                    selectedFiles.forEach((file) => formData.append("files", file));
                     await api.post(
                         `/checklist/entries/${entryId}/attachments`,
                         formData,
@@ -218,71 +218,53 @@ export default function AttendanceDetail() {
                 setEntries(r.data);
                 handleCloseChkDialog();
             })
-            .catch((err) => {
-                console.error("Falha ao criar entry de checklist:", err);
-                alert("Erro ao salvar o checklist. Confira o console.");
-            });
+            .catch(() => alert("Erro ao salvar o checklist."));
     };
 
     const handleDeleteEntry = (entryId) => {
-        if (!window.confirm("Deseja realmente excluir esta entrada de checklist?"))
-            return;
+        if (!window.confirm("Deseja realmente excluir esta entrada?")) return;
         api
             .delete(`/checklist/entries/${entryId}`)
-            .then(() => {
-                setEntries((arr) => arr.filter((e) => e.id !== entryId));
-            })
-            .catch((err) => {
-                console.error("Falha ao remover entry:", err);
-                alert("Erro ao excluir. Confira o console.");
-            });
+            .then(() => setEntries((arr) => arr.filter((e) => e.id !== entryId)))
+            .catch(() => alert("Erro ao excluir entry."));
     };
 
-    // ─── Ações Aba “Peças” ────────────────────────────────────────────────
+    /* ──────────── Peças ──────────── */
     const handleOpenPartsDialog = () => setOpenPartsDialog(true);
     const handleClosePartsDialog = () => {
         setOpenPartsDialog(false);
-        setSelectedPartId("");
+        setSelectedPart(null);
         setSelectedQty(1);
     };
 
     const handleSubmitPart = () => {
-        if (!selectedPartId || selectedQty <= 0) {
-            alert("Selecione uma peça e informe quantidade válida.");
+        if (!selectedPart || selectedQty <= 0) {
+            alert("Selecione peça e quantidade válida.");
             return;
         }
-        const payload = {
-            part_id: Number(selectedPartId),
-            quantity: Number(selectedQty),
-        };
-
         api
-            .post(`/attendances/${id}/parts`, payload)
+            .post(`/attendances/${id}/parts`, {
+                part_id: selectedPart.id,
+                quantity: Number(selectedQty),
+            })
             .then(() => {
                 fetchAttendanceParts();
                 handleClosePartsDialog();
             })
-            .catch((err) => {
-                console.error("Falha ao adicionar peça:", err);
-                const msg =
-                    err.response?.data?.error || "Erro ao salvar peça. Confira o console.";
-                alert(msg);
-            });
+            .catch((err) =>
+                alert(err.response?.data?.error || "Erro ao salvar peça.")
+            );
     };
 
     const handleDeletePart = (attendancePartId) => {
-        if (!window.confirm("Deseja remover esta peça da O.S.?")) return;
-
+        if (!window.confirm("Deseja remover esta peça?")) return;
         api
             .delete(`/attendances/${id}/parts/${attendancePartId}`)
             .then(() => fetchAttendanceParts())
-            .catch((err) => {
-                console.error("Falha ao remover peça:", err);
-                alert("Erro ao excluir peça. Confira o console.");
-            });
+            .catch(() => alert("Erro ao excluir peça."));
     };
 
-    // ─── Ações Aba “Serviços” ─────────────────────────────────────────────
+    /* ──────────── Serviços ──────────── */
     const handleOpenServiceDialog = () => setOpenServiceDialog(true);
     const handleCloseServiceDialog = () => {
         setOpenServiceDialog(false);
@@ -291,52 +273,38 @@ export default function AttendanceDetail() {
     };
 
     const handleSubmitService = () => {
-        if (
-            !newServiceDescription.trim() ||
-            newServicePrice === "" ||
-            isNaN(Number(newServicePrice))
-        ) {
-            alert("Informe descrição e preço válidos para o serviço.");
+        if (!newServiceDescription.trim() || newServicePrice === "") {
+            alert("Informe descrição e preço válidos.");
             return;
         }
-
-        const payload = {
-            description: newServiceDescription.trim(),
-            price: Number(newServicePrice),
-            attendance_id: Number(id),
-        };
-
         api
-            .post("/services", payload)
-            .then(() => {
-                return api.get("/services");
+            .post("/services", {
+                description: newServiceDescription.trim(),
+                price: Number(newServicePrice),
+                attendance_id: Number(id),
             })
-            .then((r) => {
-                const filtered = r.data.filter((s) => s.attendance_id === Number(id));
-                setAttendanceServices(filtered);
-                handleCloseServiceDialog();
-            })
-            .catch((err) => {
-                console.error("Erro ao criar serviço:", err);
-                alert("Falha ao criar serviço. Confira o console.");
-            });
+            .then(() =>
+                api.get("/services").then((r) =>
+                    setAttendanceServices(
+                        r.data.filter((s) => s.attendance_id === Number(id))
+                    )
+                )
+            )
+            .then(handleCloseServiceDialog)
+            .catch(() => alert("Erro ao criar serviço."));
     };
 
     const handleDeleteService = (serviceId) => {
         if (!window.confirm("Deseja remover este serviço?")) return;
-
         api
             .delete(`/services/${serviceId}`)
-            .then(() => {
-                setAttendanceServices((arr) => arr.filter((s) => s.id !== serviceId));
-            })
-            .catch((err) => {
-                console.error("Erro ao remover serviço:", err);
-                alert("Falha ao excluir serviço. Confira o console.");
-            });
+            .then(() =>
+                setAttendanceServices((arr) => arr.filter((s) => s.id !== serviceId))
+            )
+            .catch(() => alert("Erro ao excluir serviço."));
     };
 
-    // ─── Se ainda estiver carregando ou se “id” for inválido ──────────────
+    /* ──────────── Render ──────────── */
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" mt={4}>
@@ -348,61 +316,49 @@ export default function AttendanceDetail() {
         return <Typography sx={{ mt: 4 }}>Atendimento não encontrado.</Typography>;
     }
 
-    // ─── Renderização principal ──────────────────────────────────────────
-    const totalGeral = attendanceParts.reduce(
-        (sum, item) => sum + item.subtotal,
-        0
-    );
-    // Soma dos preços de todos os serviços vinculados
+    const totalGeral = attendanceParts.reduce((sum, i) => sum + i.subtotal, 0);
     const totalServicos = attendanceServices.reduce(
-        (sum, srv) => sum + srv.price,
+        (s, srv) => s + srv.price,
         0
     );
 
     return (
         <Container maxWidth="md" sx={{ mt: 4 }}>
+            {/* topo */}
             <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h4">
                     O.S. #{attendance.id} – {attendance.client_name}
                 </Typography>
-
                 <Box>
                     <Button
                         variant="outlined"
-                        color="secondary"
                         sx={{ mr: 1 }}
                         onClick={() => navigate("/attendances")}
                     >
-                        Voltar à Lista
+                        Voltar
                     </Button>
-
-                    {/* Botão para gerar PDF */}
                     <Button
                         variant="contained"
-                        color="primary"
-                        onClick={() => {
+                        onClick={() =>
                             api
                                 .get(`/attendances/${attendance.id}/report`, {
                                     responseType: "blob",
                                 })
                                 .then((res) => {
-                                    const blob = new Blob([res.data], {
-                                        type: "application/pdf",
-                                    });
-                                    const url = URL.createObjectURL(blob);
+                                    const url = URL.createObjectURL(
+                                        new Blob([res.data], { type: "application/pdf" })
+                                    );
                                     window.open(url);
                                 })
-                                .catch((err) => {
-                                    console.error("Erro ao baixar PDF:", err);
-                                    alert("Não foi possível gerar o PDF. Verifique o console.");
-                                });
-                        }}
+                                .catch(() => alert("Falha ao gerar PDF."))
+                        }
                     >
                         Gerar PDF
                     </Button>
                 </Box>
             </Box>
 
+            {/* abas */}
             <Box sx={{ borderBottom: 1, borderColor: "divider", mt: 2 }}>
                 <Tabs value={tabIndex} onChange={handleTabChange}>
                     <Tab label="Dados Gerais" />
@@ -412,7 +368,7 @@ export default function AttendanceDetail() {
                 </Tabs>
             </Box>
 
-            {/* ===== Aba 0: Dados Gerais ===== */}
+            {/* Aba 0 */}
             <TabPanel value={tabIndex} index={0}>
                 <Paper sx={{ p: 2 }}>
                     <Typography>
@@ -446,7 +402,7 @@ export default function AttendanceDetail() {
                 </Paper>
             </TabPanel>
 
-            {/* ===== Aba 1: Checklists ===== */}
+            {/* Aba 1 – Checklists */}
             <TabPanel value={tabIndex} index={1}>
                 <Box display="flex" justifyContent="flex-end" mb={2}>
                     <Button
@@ -483,7 +439,7 @@ export default function AttendanceDetail() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {entries.length > 0 ? (
+                            {entries.length ? (
                                 entries.map((e) => (
                                     <TableRow
                                         key={e.id}
@@ -523,13 +479,18 @@ export default function AttendanceDetail() {
                     </Table>
                 </TableContainer>
 
-                <Dialog open={openChkDialog} onClose={handleCloseChkDialog} fullWidth maxWidth="sm">
+                {/* Dialog checklist */}
+                <Dialog
+                    open={openChkDialog}
+                    onClose={handleCloseChkDialog}
+                    fullWidth
+                    maxWidth="sm"
+                >
                     <DialogTitle>Nova Entrada de Checklist</DialogTitle>
                     <DialogContent>
                         <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel id="label-template">Template</InputLabel>
+                            <InputLabel>Template</InputLabel>
                             <Select
-                                labelId="label-template"
                                 value={templateId}
                                 label="Template"
                                 onChange={handleTemplateChange}
@@ -554,9 +515,8 @@ export default function AttendanceDetail() {
                         />
 
                         <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel id="label-entry-type">Tipo</InputLabel>
+                            <InputLabel>Tipo</InputLabel>
                             <Select
-                                labelId="label-entry-type"
                                 value={entryType}
                                 label="Tipo"
                                 onChange={(e) => setEntryType(e.target.value)}
@@ -566,7 +526,6 @@ export default function AttendanceDetail() {
                             </Select>
                         </FormControl>
 
-                        {/* Novo campo para selecionar múltiplos arquivos */}
                         <Box sx={{ mb: 2 }}>
                             <Button variant="outlined" component="label">
                                 Selecionar Imagens
@@ -592,12 +551,7 @@ export default function AttendanceDetail() {
                         {templatesFields.fields?.map((field, idx) => (
                             <Paper
                                 key={idx}
-                                sx={{
-                                    p: 2,
-                                    mb: 2,
-                                    display: "flex",
-                                    alignItems: "center",
-                                }}
+                                sx={{ p: 2, mb: 2, display: "flex", alignItems: "center" }}
                                 variant="outlined"
                             >
                                 <Typography sx={{ width: 140 }}>{field.label}</Typography>
@@ -606,7 +560,11 @@ export default function AttendanceDetail() {
                                         fullWidth
                                         value={values[field.label] || ""}
                                         onChange={(e) =>
-                                            handleValueChange(field.label, field.type, e.target.value)
+                                            handleValueChange(
+                                                field.label,
+                                                field.type,
+                                                e.target.value
+                                            )
                                         }
                                     />
                                 )}
@@ -616,7 +574,11 @@ export default function AttendanceDetail() {
                                         type="number"
                                         value={values[field.label] || ""}
                                         onChange={(e) =>
-                                            handleValueChange(field.label, field.type, e.target.value)
+                                            handleValueChange(
+                                                field.label,
+                                                field.type,
+                                                e.target.value
+                                            )
                                         }
                                     />
                                 )}
@@ -642,14 +604,14 @@ export default function AttendanceDetail() {
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleCloseChkDialog}>Cancelar</Button>
-                        <Button onClick={handleSubmitChecklist} variant="contained">
+                        <Button variant="contained" onClick={handleSubmitChecklist}>
                             Salvar
                         </Button>
                     </DialogActions>
                 </Dialog>
             </TabPanel>
 
-            {/* ===== Aba 2: Peças ===== */}
+            {/* Aba 2 – Peças */}
             <TabPanel value={tabIndex} index={2}>
                 <Box display="flex" justifyContent="flex-end" mb={2}>
                     <Button
@@ -686,7 +648,7 @@ export default function AttendanceDetail() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {attendanceParts.length > 0 ? (
+                            {attendanceParts.length ? (
                                 attendanceParts.map((p) => (
                                     <TableRow key={p.id}>
                                         <TableCell>{p.id}</TableCell>
@@ -714,13 +676,13 @@ export default function AttendanceDetail() {
                     </Table>
                 </TableContainer>
 
-                {/* Total geral das peças no final da aba */}
                 <Box display="flex" justifyContent="flex-end" mt={2}>
                     <Typography variant="h6">
                         <strong>Total Orçado:</strong> R$ {totalGeral.toFixed(2)}
                     </Typography>
                 </Box>
 
+                {/* Dialog Peças */}
                 <Dialog
                     open={openPartsDialog}
                     onClose={handleClosePartsDialog}
@@ -728,25 +690,41 @@ export default function AttendanceDetail() {
                     maxWidth="sm"
                 >
                     <DialogTitle>Vincular Peça à O.S.</DialogTitle>
+                    <br />
                     <DialogContent>
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel id="label-part">Peça</InputLabel>
-                            <Select
-                                labelId="label-part"
-                                value={selectedPartId}
-                                label="Peça"
-                                onChange={(e) => setSelectedPartId(e.target.value)}
-                            >
-                                <MenuItem value="">
-                                    <em>Selecione</em>
-                                </MenuItem>
-                                {allParts.map((p) => (
-                                    <MenuItem key={p.id} value={p.id}>
-                                        {p.description} (Em Estoque: {p.stock})
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                        <Autocomplete
+                            fullWidth
+                            options={allParts}
+                            value={selectedPart}
+                            onChange={(_, val) => setSelectedPart(val)}
+                            getOptionLabel={(o) =>
+                                o ? `${o.id} – ${o.description}` : ""
+                            }
+                            filterOptions={(opts, state) =>
+                                opts.filter((o) =>
+                                    `${o.id} ${o.description}`
+                                        .toLowerCase()
+                                        .includes(state.inputValue.toLowerCase())
+                                )
+                            }
+                            isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                            noOptionsText="Nenhuma peça encontrada"
+                            renderOption={(props, o) => (
+                                <li {...props} key={o.id}>
+                                    <Box display="flex" flexDirection="column">
+                                        <Typography variant="body2">
+                                            {o.id} – {o.description}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Estoque: {o.stock} | R$ {o.unit_price.toFixed(2)}
+                                        </Typography>
+                                    </Box>
+                                </li>
+                            )}
+                            renderInput={(params) => (
+                                <TextField {...params} label="Peça" sx={{ mb: 2 }} />
+                            )}
+                        />
 
                         <TextField
                             fullWidth
@@ -754,20 +732,22 @@ export default function AttendanceDetail() {
                             margin="normal"
                             label="Quantidade"
                             value={selectedQty}
-                            onChange={(e) => setSelectedQty(Number(e.target.value))}
+                            onChange={(e) =>
+                                setSelectedQty(Math.max(1, Number(e.target.value)))
+                            }
                             InputProps={{ inputProps: { min: 1 } }}
                         />
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleClosePartsDialog}>Cancelar</Button>
-                        <Button onClick={handleSubmitPart} variant="contained">
+                        <Button variant="contained" onClick={handleSubmitPart}>
                             Adicionar
                         </Button>
                     </DialogActions>
                 </Dialog>
             </TabPanel>
 
-            {/* ===== Aba 3: Serviços ===== */}
+            {/* Aba 3 – Serviços */}
             <TabPanel value={tabIndex} index={3}>
                 <Box display="flex" justifyContent="flex-end" mb={2}>
                     <Button
@@ -798,7 +778,7 @@ export default function AttendanceDetail() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {attendanceServices.length > 0 ? (
+                            {attendanceServices.length ? (
                                 attendanceServices.map((s) => (
                                     <TableRow key={s.id}>
                                         <TableCell>{s.id}</TableCell>
@@ -824,13 +804,13 @@ export default function AttendanceDetail() {
                     </Table>
                 </TableContainer>
 
-                {/* Total geral dos serviços no final da aba */}
                 <Box display="flex" justifyContent="flex-end" mt={2}>
                     <Typography variant="h6">
                         <strong>Total Serviços:</strong> R$ {totalServicos.toFixed(2)}
                     </Typography>
                 </Box>
 
+                {/* Dialog Serviço */}
                 <Dialog
                     open={openServiceDialog}
                     onClose={handleCloseServiceDialog}
@@ -858,7 +838,7 @@ export default function AttendanceDetail() {
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleCloseServiceDialog}>Cancelar</Button>
-                        <Button onClick={handleSubmitService} variant="contained">
+                        <Button variant="contained" onClick={handleSubmitService}>
                             Salvar
                         </Button>
                     </DialogActions>

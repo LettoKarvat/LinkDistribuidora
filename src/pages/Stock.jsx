@@ -1,6 +1,5 @@
 // src/pages/Stock.jsx
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -11,6 +10,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Button,
   TextField,
   IconButton,
@@ -36,18 +36,23 @@ import { useSnackbar } from '../hooks/useSnackbar';
 function Stock() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState('');
 
-  // Diálogo de movimentação existente
+  // ── filtros ─────────────────────────────────────────────
+  const [search, setSearch] = useState('');
+  const [filialFilter, setFilialFilter] = useState('all');
+
+  // ── paginação ───────────────────────────────────────────
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  // diálogos
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-
-  // Diálogo “Adicionar Peça” (novo)
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
   const { showSuccess, showError } = useSnackbar();
 
-  // Formulário para movimentação
+  // form movimentação
   const {
     control: movControl,
     handleSubmit: handleMovSubmit,
@@ -62,7 +67,7 @@ function Stock() {
     },
   });
 
-  // Formulário para criar nova peça
+  // form criar peça
   const {
     control: createControl,
     handleSubmit: handleCreateSubmit,
@@ -77,14 +82,14 @@ function Stock() {
     },
   });
 
-  // ─── 1) FETCH DOS ITENS DO ESTOQUE ─────────────────────────────────────────
+  // ─── 1) fetch itens ─────────────────────────────────────
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/stock/items');
-      setItems(response.data);
-    } catch (error) {
-      console.error('Failed to fetch stock items:', error);
+      const { data } = await api.get('/stock/items');
+      setItems(data);
+    } catch (err) {
+      console.error(err);
       showError('Não foi possível carregar os itens do estoque');
     } finally {
       setLoading(false);
@@ -95,12 +100,36 @@ function Stock() {
     fetchItems();
   }, []);
 
-  // ─── 2) FILTRO DE BUSCA (pela descrição) ─────────────────────────────────
-  const filteredItems = items.filter((item) =>
-    item.description.toLowerCase().includes(filter.toLowerCase())
+  // lista de filiais para dropdown
+  const filiais = useMemo(
+    () => Array.from(new Set(items.map((i) => i.filial))).sort(),
+    [items]
   );
 
-  // ─── 3) MOVIMENTAÇÃO DE ESTOQUE ────────────────────────────────────────────
+  // ─── 2) filtro local ────────────────────────────────────
+  const filteredItems = items.filter((item) => {
+    const matchesSearch =
+      item.description.toLowerCase().includes(search.toLowerCase()) ||
+      String(item.id).includes(search);
+    const matchesFilial =
+      filialFilter === 'all' || item.filial === filialFilter;
+    return matchesSearch && matchesFilial;
+  });
+
+  // dados paginados
+  const paginatedItems = filteredItems.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  // handlers paginação
+  const handleChangePage = (_, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (e) => {
+    setRowsPerPage(parseInt(e.target.value, 10));
+    setPage(0);
+  };
+
+  // ─── 3) movimentação ────────────────────────────────────
   const handleOpenMovementDialog = (item) => {
     setSelectedItem(item);
     resetMov({
@@ -119,21 +148,17 @@ function Stock() {
           ? -Math.abs(data.quantity)
           : Math.abs(data.quantity);
 
-      await api.post('/stock/movements', {
-        ...data,
-        quantity,
-      });
-
-      showSuccess('Movimentação de estoque registrada com sucesso');
+      await api.post('/stock/movements', { ...data, quantity });
+      showSuccess('Movimentação registrada com sucesso');
       await fetchItems();
       setDialogOpen(false);
-    } catch (error) {
-      console.error('Failed to save stock movement:', error);
-      showError('Erro ao registrar movimentação de estoque');
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao registrar movimentação');
     }
   };
 
-  // ─── 4) CRIAÇÃO DE NOVA PEÇA ────────────────────────────────────────────────
+  // ─── 4) criação peça ────────────────────────────────────
   const handleOpenNewDialog = () => {
     resetCreate({
       filial: '',
@@ -146,27 +171,24 @@ function Stock() {
 
   const onSubmitCreate = async (data) => {
     try {
-      // Monta payload conforme o backend espera
-      const payload = {
+      await api.post('/stock/items', {
         filial: data.filial,
         description: data.description,
         quantity: data.quantity,
         price: parseFloat(data.price),
-      };
-
-      await api.post('/stock/items', payload);
-      showSuccess('Nova peça cadastrada com sucesso');
+      });
+      showSuccess('Peça criada com sucesso');
       await fetchItems();
       setNewDialogOpen(false);
-    } catch (error) {
-      console.error('Failed to create stock item:', error);
-      showError('Erro ao cadastrar nova peça');
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao cadastrar peça');
     }
   };
 
   return (
     <Box sx={{ height: '100%', width: '100%' }}>
-      {/* ─── CABEÇALHO COM BUSCA E BOTÕES ────────────────────────────────────── */}
+      {/* cabeçalho */}
       <Box
         sx={{
           display: 'flex',
@@ -180,13 +202,16 @@ function Stock() {
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          {/* Campo de busca */}
+          {/* busca texto */}
           <TextField
             size="small"
-            placeholder="Buscar item..."
+            placeholder="Buscar por descrição ou ID..."
             variant="outlined"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -194,13 +219,32 @@ function Stock() {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: 300 }}
+            sx={{ width: 280 }}
           />
 
-          {/* Botão “Adicionar Peça” */}
+          {/* filtro filial */}
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Filial</InputLabel>
+            <Select
+              value={filialFilter}
+              label="Filial"
+              onChange={(e) => {
+                setFilialFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="all">Todas</MenuItem>
+              {filiais.map((f) => (
+                <MenuItem key={f} value={f}>
+                  {f}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* botão nova peça */}
           <Button
             variant="contained"
-            color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenNewDialog}
           >
@@ -209,63 +253,76 @@ function Stock() {
         </Box>
       </Box>
 
-      {/* ─── TABELA DE ITENS ────────────────────────────────────────────────── */}
+      {/* tabela */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper} sx={{ overflow: 'auto' }}>
-          <Table sx={{ minWidth: 650 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Filial</TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell>Descrição</TableCell>
-                <TableCell align="right">Estoque</TableCell>
-                <TableCell align="right">Preço</TableCell>
-                <TableCell align="center">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.filial}</TableCell>
-                  <TableCell>{item.id}</TableCell>
-                  <TableCell>{item.description}</TableCell>
-                  <TableCell align="right">{item.quantity}</TableCell>
-                  <TableCell align="right">
-                    {new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    }).format(item.price)}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<InventoryIcon />}
-                      onClick={() => handleOpenMovementDialog(item)}
-                    >
-                      Movimentar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {filteredItems.length === 0 && (
+        <Paper sx={{ overflow: 'auto' }}>
+          <TableContainer>
+            <Table stickyHeader>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    Nenhum item encontrado
-                  </TableCell>
+                  <TableCell>Filial</TableCell>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Descrição</TableCell>
+                  <TableCell align="right">Estoque</TableCell>
+                  <TableCell align="right">Preço</TableCell>
+                  <TableCell align="center">Ações</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {paginatedItems.map((item) => (
+                  <TableRow hover key={item.id}>
+                    <TableCell>{item.filial}</TableCell>
+                    <TableCell>{item.id}</TableCell>
+                    <TableCell>{item.description}</TableCell>
+                    <TableCell align="right">{item.quantity}</TableCell>
+                    <TableCell align="right">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(item.price)}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<InventoryIcon />}
+                        onClick={() => handleOpenMovementDialog(item)}
+                      >
+                        Movimentar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+                {paginatedItems.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      Nenhum item encontrado
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* paginação */}
+          <TablePagination
+            component="div"
+            count={filteredItems.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </Paper>
       )}
 
-      {/* ─── DIÁLOGO “Adicionar Peça” ───────────────────────────────────────── */}
+      {/* diálogo nova peça */}
       <Dialog
         open={newDialogOpen}
         onClose={() => setNewDialogOpen(false)}
@@ -276,7 +333,7 @@ function Stock() {
         <form onSubmit={handleCreateSubmit(onSubmitCreate)}>
           <DialogContent>
             <Grid container spacing={2}>
-              {/* Filial */}
+              {/* filial */}
               <Grid item xs={12}>
                 <Controller
                   name="filial"
@@ -285,16 +342,15 @@ function Stock() {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      fullWidth
                       label="Filial"
+                      fullWidth
                       error={!!createErrors.filial}
                       helperText={createErrors.filial?.message}
                     />
                   )}
                 />
               </Grid>
-
-              {/* Descrição */}
+              {/* descrição */}
               <Grid item xs={12}>
                 <Controller
                   name="description"
@@ -303,30 +359,29 @@ function Stock() {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      fullWidth
                       label="Descrição"
+                      fullWidth
                       error={!!createErrors.description}
                       helperText={createErrors.description?.message}
                     />
                   )}
                 />
               </Grid>
-
-              {/* Estoque inicial */}
+              {/* estoque inicial */}
               <Grid item xs={12} sm={6}>
                 <Controller
                   name="quantity"
                   control={createControl}
                   rules={{
                     required: 'Quantidade inicial é obrigatória',
-                    min: { value: 0, message: 'Quantidade ≥ 0' },
+                    min: { value: 0, message: '≥ 0' },
                   }}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      fullWidth
                       type="number"
                       label="Estoque Inicial"
+                      fullWidth
                       error={!!createErrors.quantity}
                       helperText={createErrors.quantity?.message}
                       InputProps={{ inputProps: { min: 0 } }}
@@ -334,8 +389,7 @@ function Stock() {
                   )}
                 />
               </Grid>
-
-              {/* Preço */}
+              {/* preço */}
               <Grid item xs={12} sm={6}>
                 <Controller
                   name="price"
@@ -350,8 +404,8 @@ function Stock() {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      fullWidth
                       label="Preço (R$)"
+                      fullWidth
                       error={!!createErrors.price}
                       helperText={createErrors.price?.message}
                       InputProps={{
@@ -374,7 +428,7 @@ function Stock() {
         </form>
       </Dialog>
 
-      {/* ─── DIÁLOGO “Movimentação de Estoque” (existente) ──────────────────── */}
+      {/* diálogo movimentação */}
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
@@ -387,7 +441,7 @@ function Stock() {
         <form onSubmit={handleMovSubmit(onSubmitMovement)}>
           <DialogContent>
             <Grid container spacing={2}>
-              {/* Tipo de operação */}
+              {/* operação */}
               <Grid item xs={12}>
                 <Controller
                   name="operation_type"
@@ -395,14 +449,8 @@ function Stock() {
                   rules={{ required: 'Operação é obrigatória' }}
                   render={({ field }) => (
                     <FormControl fullWidth error={!!movErrors.operation_type}>
-                      <InputLabel id="operation-type-label">
-                        Operação
-                      </InputLabel>
-                      <Select
-                        {...field}
-                        labelId="operation-type-label"
-                        label="Operação"
-                      >
+                      <InputLabel>Operação</InputLabel>
+                      <Select {...field} label="Operação">
                         <MenuItem value="add">Entrada</MenuItem>
                         <MenuItem value="remove">Saída</MenuItem>
                       </Select>
@@ -410,34 +458,29 @@ function Stock() {
                   )}
                 />
               </Grid>
-
-              {/* Quantidade */}
+              {/* quantidade */}
               <Grid item xs={12}>
                 <Controller
                   name="quantity"
                   control={movControl}
                   rules={{
                     required: 'Quantidade é obrigatória',
-                    min: { value: 1, message: 'Quantidade deve ser ≥ 1' },
+                    min: { value: 1, message: '≥ 1' },
                   }}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      fullWidth
                       type="number"
                       label="Quantidade"
-                      required
+                      fullWidth
                       error={!!movErrors.quantity}
                       helperText={movErrors.quantity?.message}
-                      InputProps={{
-                        inputProps: { min: 1 },
-                      }}
+                      InputProps={{ inputProps: { min: 1 } }}
                     />
                   )}
                 />
               </Grid>
-
-              {/* Observações */}
+              {/* observações */}
               <Grid item xs={12}>
                 <Controller
                   name="notes"
