@@ -53,9 +53,7 @@ function SideDrawer({ drawerWidth, mobileOpen, onDrawerToggle }) {
   const mainNavigationItems = [
     { path: '/', label: 'Dashboard', icon: <DashboardIcon /> },
     { path: '/clients', label: 'Clientes', icon: <PeopleIcon /> },
-    { path: '/tasks', label: 'Tarefas', icon: <TaskIcon /> },
-    // novo campo "Atendimentos"
-    { path: '/attendances', label: 'Atendimentos', icon: <SupportAgentIcon /> },
+    { path: '/attendances', label: 'Ordem de serviço', icon: <SupportAgentIcon /> },
     { path: '/stock', label: 'Estoque', icon: <InventoryIcon /> },
     { path: '/agenda', label: 'Agenda', icon: <CalendarMonthIcon /> },
   ];
@@ -221,7 +219,7 @@ function SideDrawer({ drawerWidth, mobileOpen, onDrawerToggle }) {
 
       <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
         <Typography variant="body2" color="text.secondary" align="center">
-          © 2025 Inova
+          © 2025 <br />Faives Soluções e Tecnologias
         </Typography>
       </Box>
     </DrawerContent>
@@ -233,7 +231,7 @@ function SideDrawer({ drawerWidth, mobileOpen, onDrawerToggle }) {
       sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
       aria-label="menu de navegação"
     >
-      {/* Drawer temporário para Mobile */}
+
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -250,8 +248,6 @@ function SideDrawer({ drawerWidth, mobileOpen, onDrawerToggle }) {
       >
         {drawer}
       </Drawer>
-
-      {/* Drawer permanente para Desktop */}
       <Drawer
         variant="permanent"
         sx={{
